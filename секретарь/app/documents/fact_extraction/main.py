@@ -367,6 +367,7 @@ class Stage3Processor:
         lines,
         doc_type,
         doc_id,
+        visual_ocr=None,
     ):
         extractor = EXTRACTOR_BY_TYPE.get(
             doc_type
@@ -377,6 +378,7 @@ class Stage3Processor:
             lines=lines,
             doc_type=doc_type,
             doc_id=doc_id,
+            visual_ocr=visual_ocr,
         )
 
     # ========================================================
@@ -657,6 +659,8 @@ class Stage3Processor:
             # ДОПОЛНИТЕЛЬНЫЙ OCR ДЛЯ ВИЗУАЛЬНЫХ ПОЛЕЙ
             # ========================================================
 
+            visual_ocr = None
+
             if (
                 classification.doc_type == "Полис ОСАГО"
                 and filepath.lower().endswith(".pdf")
@@ -713,6 +717,7 @@ class Stage3Processor:
                 extraction_result.lines,
                 classification.doc_type,
                 doc_id,
+                visual_ocr=visual_ocr,
             )
             # ================================================
             # 3.20 — VALIDATION
