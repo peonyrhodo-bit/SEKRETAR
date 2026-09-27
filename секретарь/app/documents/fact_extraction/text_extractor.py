@@ -55,6 +55,10 @@ class TextExtractionResult:
         default_factory=list
     )
 
+    ocr_boxes: List[dict] = field(
+        default_factory=list
+    )
+
 
 class TextExtractor:
     def __init__(self):
@@ -102,6 +106,7 @@ class TextExtractor:
         )
         try:
             pdf = pdfium.PdfDocument(filepath)
+            ocr_boxes = []
             result.pages_total = len(pdf)
             text_lines = []
             for page_index in range(len(pdf)):
@@ -196,6 +201,61 @@ class TextExtractor:
             return result
 
     # ============================================================
+    # ДОПОЛНИТЕЛЬНЫЙ OCR PDF-СТРАНИЦ
+    # ============================================================
+    def extract_pdf_ocr_pages(self, filepath: str, pages=None):
+        """
+        Дополнительный OCR PDF-страниц, даже если text layer существует.
+
+        Используется для документов, где критические значения
+        представлены визуальными ячейками/графикой.
+        """
+        result = {
+            "method": "OCR_AUGMENTATION",
+            "ocr_version": self.ocr and "rapidocr-onnxruntime" or "",
+            "pages": [],
+        }
+
+        if self.ocr is None:
+            return result
+
+        pdf = pdfium.PdfDocument(filepath)
+
+        if pages is None:
+            pages = range(1, len(pdf) + 1)
+
+        for page_number in pages:
+            try:
+                page = pdf[page_number - 1]
+
+                bitmap = page.render(scale=2.0)
+                image = bitmap.to_numpy()
+
+                ocr_items = self._run_ocr(
+                    image,
+                    page_number,
+                    return_boxes=True,
+                )
+
+                result["pages"].append(
+                    {
+                        "page": page_number,
+                        "items": ocr_items,
+                    }
+                )
+
+            except Exception as exc:
+                result["pages"].append(
+                    {
+                        "page": page_number,
+                        "items": [],
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
+
+        return result
+
+    # ============================================================
     # IMAGE
     # ============================================================
     def _extract_from_image(self, filepath: str):
@@ -243,23 +303,39 @@ class TextExtractor:
     # ============================================================
     # OCR
     # ============================================================
-    def _run_ocr(self, image, page_number: int):
+    def _run_ocr(self, image, page_number: int, return_boxes=False):
         if self.ocr is None:
             return []
+
         try:
             output, _ = self.ocr(image)
         except Exception:
             return []
+
         lines = []
+
         if output is None:
             return lines
+
         for item in output:
             try:
-                # RapidOCR обычно:
-                # [box, text, confidence]
+                box = item[0]
                 text = str(item[1]).strip()
                 confidence = float(item[2])
-                if text:
+
+                if not text:
+                    continue
+
+                if return_boxes:
+                    lines.append(
+                        {
+                            "text": text,
+                            "confidence": confidence,
+                            "page": page_number,
+                            "box": box,
+                        }
+                    )
+                else:
                     lines.append(
                         (
                             text,
@@ -267,8 +343,10 @@ class TextExtractor:
                             page_number,
                         )
                     )
+
             except Exception:
                 continue
+
         return lines
 
     # ============================================================
