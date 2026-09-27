@@ -652,6 +652,45 @@ class Stage3Processor:
                 f"ℹ️ Причина: "
                 f"{classification.reason}"
             )
+
+            # ========================================================
+            # ДОПОЛНИТЕЛЬНЫЙ OCR ДЛЯ ВИЗУАЛЬНЫХ ПОЛЕЙ
+            # ========================================================
+
+            if (
+                classification.doc_type == "Полис ОСАГО"
+                and filepath.lower().endswith(".pdf")
+            ):
+                check_stage_3_action("RUN_OCR")
+
+                visual_ocr = self.text_extractor.extract_pdf_ocr_pages(
+                    filepath
+                )
+
+                # Сохраняем отдельно: оригинальный text layer
+                # не заменяется.
+                result["visual_ocr"] = visual_ocr
+
+                result["extraction"]["visual_ocr"] = True
+
+                visual_lines = []
+
+                for page_data in visual_ocr["pages"]:
+                    for item in page_data.get("items", []):
+                        visual_lines.append(
+                            (
+                                item["text"],
+                                item["confidence"],
+                                item["page"],
+                            )
+                        )
+
+                # Text layer + OCR.
+                # Дубликаты позже отсекаются extractor'ом.
+                extraction_result.lines.extend(
+                    visual_lines
+                )
+
             # ================================================
             # 3.9 — FACT EXTRACTION
             # ================================================
